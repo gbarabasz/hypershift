@@ -610,8 +610,8 @@ func (r *GCPPrivateServiceConnectReconciler) ensureIPAddress(ctx context.Context
 		Description: fmt.Sprintf("PSC endpoint IP for HyperShift cluster %s", gcpPSC.Name),
 		AddressType: "INTERNAL",
 		Subnetwork:  r.constructSubnetURL(pscSubnet, customerProject, region),
+		Labels:      gcpResourceLabels(hcp),
 		// Purpose not set for subnetwork addresses - PSC purpose is implicit when used with ForwardingRule
-		Labels: map[string]string{"goog-partner-solution": "isol_psn_0014m00001h31bnqaq_openshift"},
 	}
 
 	log.Info("Reserving new IP address for PSC endpoint", "name", ipName, "subnet", pscSubnet)
@@ -692,8 +692,8 @@ func (r *GCPPrivateServiceConnectReconciler) reconcilePSCEndpoint(ctx context.Co
 		Subnetwork:  r.constructSubnetURL(string(hcp.Spec.Platform.GCP.NetworkConfig.PrivateServiceConnectSubnet.Name), customerProject, region),
 		Target:      gcpPSC.Status.ServiceAttachmentURI,                     // From management-side
 		IPAddress:   r.constructAddressURL(ipName, customerProject, region), // Reserved IP resource URL
+		Labels:      gcpResourceLabels(hcp),
 		// LoadBalancingScheme not set for PSC endpoints - it's implicit and setting it causes API errors
-		Labels: map[string]string{"goog-partner-solution": "isol_psn_0014m00001h31bnqaq_openshift"},
 	}
 
 	log.Info("Creating PSC endpoint", "name", endpointName, "serviceAttachment", gcpPSC.Status.ServiceAttachmentURI)
@@ -873,6 +873,22 @@ func (r *GCPPrivateServiceConnectReconciler) constructSubnetURL(subnetName, cust
 
 func (r *GCPPrivateServiceConnectReconciler) constructAddressURL(addressName, customerProject, region string) string {
 	return fmt.Sprintf("projects/%s/regions/%s/addresses/%s", customerProject, region, addressName)
+}
+
+// gcpResourceLabels converts HCP GCP resource labels to the map format expected by GCP APIs.
+func gcpResourceLabels(hcp *hyperv1.HostedControlPlane) map[string]string {
+	if hcp.Spec.Platform.GCP == nil || len(hcp.Spec.Platform.GCP.ResourceLabels) == 0 {
+		return nil
+	}
+	labels := make(map[string]string, len(hcp.Spec.Platform.GCP.ResourceLabels))
+	for _, l := range hcp.Spec.Platform.GCP.ResourceLabels {
+		v := ""
+		if l.Value != nil {
+			v = *l.Value
+		}
+		labels[l.Key] = v
+	}
+	return labels
 }
 
 // getHostedControlPlane retrieves the HostedControlPlane from the CR's owner reference
