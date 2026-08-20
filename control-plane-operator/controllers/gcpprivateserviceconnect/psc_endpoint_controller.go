@@ -611,6 +611,7 @@ func (r *GCPPrivateServiceConnectReconciler) ensureIPAddress(ctx context.Context
 		AddressType: "INTERNAL",
 		Subnetwork:  r.constructSubnetURL(pscSubnet, customerProject, region),
 		// Purpose not set for subnetwork addresses - PSC purpose is implicit when used with ForwardingRule
+		Labels: map[string]string{"goog-partner-solution": "isol_psn_0014m00001h31bnqaq_openshift"},
 	}
 
 	log.Info("Reserving new IP address for PSC endpoint", "name", ipName, "subnet", pscSubnet)
@@ -692,6 +693,7 @@ func (r *GCPPrivateServiceConnectReconciler) reconcilePSCEndpoint(ctx context.Co
 		Target:      gcpPSC.Status.ServiceAttachmentURI,                     // From management-side
 		IPAddress:   r.constructAddressURL(ipName, customerProject, region), // Reserved IP resource URL
 		// LoadBalancingScheme not set for PSC endpoints - it's implicit and setting it causes API errors
+		Labels: map[string]string{"goog-partner-solution": "isol_psn_0014m00001h31bnqaq_openshift"},
 	}
 
 	log.Info("Creating PSC endpoint", "name", endpointName, "serviceAttachment", gcpPSC.Status.ServiceAttachmentURI)
