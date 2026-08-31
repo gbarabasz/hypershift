@@ -20,6 +20,8 @@ type CPOOverrides struct {
 type CPOPlatforms struct {
 	AWS   *CPOPlatformOverrides `yaml:"aws,omitempty"`
 	Azure *CPOPlatformOverrides `yaml:"azure,omitempty"`
+	// TODO(GCP-916): temporary dev-only field — remove before merging to main.
+	GCP *CPOPlatformOverrides `yaml:"gcp,omitempty"`
 }
 
 type CPOPlatformOverrides struct {
@@ -138,6 +140,13 @@ func getOverridesByPlatformAndVersion(o *CPOOverrides) map[string]map[string]*CP
 		result["azure"] = map[string]*CPOOverride{}
 		for i, override := range o.Platforms.Azure.Overrides {
 			result["azure"][override.Version] = &o.Platforms.Azure.Overrides[i]
+		}
+	}
+	// TODO(GCP-916): temporary dev-only block — remove before merging to main.
+	if o.Platforms.GCP != nil {
+		result["gcp"] = map[string]*CPOOverride{}
+		for i, override := range o.Platforms.GCP.Overrides {
+			result["gcp"][override.Version] = &o.Platforms.GCP.Overrides[i]
 		}
 	}
 	return result

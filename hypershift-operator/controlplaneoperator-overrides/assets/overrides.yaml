@@ -448,4 +448,11 @@ platforms:
     # the referenced images before each e2e test run.
       latest: quay.io/openshift-release-dev/ocp-release:4.17.43-x86_64
       previous: quay.io/openshift-release-dev/ocp-release:4.17.20-x86_64
-      runTests: true
+  # TODO(GCP-916): temporary dev-only section — remove before merging to main.
+  # GCP CPO overrides are not yet production-ready; this entry exists solely to
+  # test the PSC resource-labels fix (branch GCP-916-psc-resource-labels) in a
+  # dev management cluster using ENABLE_CPO_OVERRIDES=1.
+  gcp:
+    overrides:
+      - version: 5.0.0-ec.6
+        cpoImage: quay.io/gbarabasz/hypershift:2af4e9f582-cpo
