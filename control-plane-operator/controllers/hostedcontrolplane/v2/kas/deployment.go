@@ -15,6 +15,7 @@ import (
 	"github.com/openshift/hypershift/support/azureutil"
 	"github.com/openshift/hypershift/support/config"
 	component "github.com/openshift/hypershift/support/controlplane-component"
+	"github.com/openshift/hypershift/support/gcputil"
 	"github.com/openshift/hypershift/support/netutil"
 	"github.com/openshift/hypershift/support/podspec"
 	"github.com/openshift/hypershift/support/proxy"
@@ -41,6 +42,10 @@ const (
 
 	azureWorkloadIdentityWebhookServingCertVolumeName = "azure-wi-webhook-serving-certs"
 	azureWorkloadIdentityWebhookKubeconfigVolumeName  = "azure-wi-webhook-kubeconfig"
+
+	gcpLBWebhookServingCertVolumeName = "gcp-lb-webhook-serving-certs"
+	gcpLBWebhookKubeconfigVolumeName  = "gcp-lb-webhook-kubeconfig"
+	gcpLBWebhookPort                  = 8443
 )
 
 var azureWorkloadIdentityWebhookWaitForKASVersionTemplate = template.Must(template.New("azure-workload-identity-webhook").Parse(`set -u
@@ -138,6 +143,10 @@ func adaptDeployment(cpContext component.WorkloadContext, deployment *appsv1.Dep
 		}
 		if err := applyAzureWorkloadIdentityWebhookContainer(&deployment.Spec.Template.Spec, hcp); err != nil {
 			return fmt.Errorf("failed to create azure workload identity webhook container: %w", err)
+		}
+	case hyperv1.GCPPlatform:
+		if err := applyGCPLBWebhookContainer(&deployment.Spec.Template.Spec, hcp); err != nil {
+			return fmt.Errorf("failed to apply GCP LB webhook container: %w", err)
 		}
 	}
 
@@ -500,6 +509,78 @@ func applyAzureWorkloadIdentityWebhookContainer(podSpec *corev1.PodSpec, hcp *hy
 			Name: azureWorkloadIdentityWebhookKubeconfigVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{SecretName: manifests.AzureWorkloadIdentityWebhookKubeconfig("").Name},
+			},
+		},
+	)
+	return nil
+}
+
+// applyGCPLBWebhookContainer adds the gcp-lb-webhook sidecar to the KAS pod.
+// The sidecar listens on 127.0.0.1:8443 and mutates Service{type: LoadBalancer}
+// objects to inject the cloud.google.com/load-balancer-resource-labels annotation,
+// so the GCP CCM applies HCP resource labels to the forwarding rules it creates.
+func applyGCPLBWebhookContainer(podSpec *corev1.PodSpec, hcp *hyperv1.HostedControlPlane) error {
+	labels := gcputil.LBResourceLabelsAnnotationValue(gcputil.ResourceLabels(hcp))
+
+	cpoImage := podspec.CPOImageName
+
+	podSpec.Containers = append(podSpec.Containers, corev1.Container{
+		Name:            "gcp-lb-webhook",
+		Image:           cpoImage,
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		Command: []string{
+			"/usr/bin/control-plane-operator",
+			"gcp-lb-webhook",
+			fmt.Sprintf("--labels=%s", labels),
+			fmt.Sprintf("--port=%d", gcpLBWebhookPort),
+			"--tls-cert=/var/run/app/certs/tls.crt",
+			"--tls-key=/var/run/app/certs/tls.key",
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("5m"),
+				corev1.ResourceMemory: resource.MustParse("20Mi"),
+			},
+		},
+		LivenessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path:   "/healthz",
+					Port:   intstr.FromInt(gcpLBWebhookPort),
+					Scheme: corev1.URISchemeHTTPS,
+				},
+			},
+			PeriodSeconds:    20,
+			FailureThreshold: 3,
+		},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path:   "/healthz",
+					Port:   intstr.FromInt(gcpLBWebhookPort),
+					Scheme: corev1.URISchemeHTTPS,
+				},
+			},
+			InitialDelaySeconds: 5,
+			PeriodSeconds:       10,
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: gcpLBWebhookServingCertVolumeName, MountPath: "/var/run/app/certs"},
+			{Name: gcpLBWebhookKubeconfigVolumeName, MountPath: "/var/run/app/kubeconfig"},
+		},
+	})
+
+	podSpec.Volumes = append(podSpec.Volumes,
+		corev1.Volume{
+			Name: gcpLBWebhookServingCertVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: manifests.GCPLBWebhookServingCert("").Name},
+			},
+		},
+		corev1.Volume{
+			Name: gcpLBWebhookKubeconfigVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: manifests.GCPLBWebhookKubeconfig("").Name},
 			},
 		},
 	)

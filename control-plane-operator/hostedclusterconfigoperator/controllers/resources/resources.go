@@ -113,6 +113,9 @@ web_identity_token_file = /var/run/secrets/openshift/serviceaccount/token
 sts_regional_endpoints = regional
 region = %s
 `
+	// gcpLBWebhookPort is the loopback port on which the gcp-lb-webhook sidecar
+	// listens inside the KAS pod. Must match the --port flag in the sidecar command.
+	gcpLBWebhookPort = 8443
 )
 
 var (
@@ -551,6 +554,9 @@ func (r *reconciler) reconcilePlatformSpecificResources(ctx context.Context, log
 		log.Info("reconciling Azure specific resources")
 		errs = append(errs, r.reconcileAzureCloudNodeManager(ctx, releaseImage.ComponentImages()["azure-cloud-node-manager"])...)
 		errs = append(errs, r.reconcileAzureIdentityWebhook(ctx)...)
+	case hyperv1.GCPPlatform:
+		log.Info("reconciling GCP specific resources")
+		errs = append(errs, r.reconcileGCPLBWebhook(ctx, hcp)...)
 	}
 	return errs
 }
@@ -2756,6 +2762,47 @@ func (r *reconciler) reconcileAzureIdentityWebhook(ctx context.Context) []error 
 					APIGroups:   []string{""},
 					APIVersions: []string{"v1"},
 					Resources:   []string{"pods"},
+				},
+			}},
+			SideEffects: &sideEffectsNone,
+		}}
+		return nil
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("failed to reconcile %T %s: %w", webhook, webhook.Name, err))
+	}
+
+	return errs
+}
+
+// reconcileGCPLBWebhook registers a MutatingWebhookConfiguration in the hosted
+// cluster that intercepts Service{type: LoadBalancer} admission requests and
+// routes them to the gcp-lb-webhook sidecar running alongside KAS on 127.0.0.1.
+// The webhook injects cloud.google.com/load-balancer-resource-labels so the GCP
+// CCM stamps HCP resource labels onto the GCP forwarding rules it creates.
+func (r *reconciler) reconcileGCPLBWebhook(ctx context.Context, hcp *hyperv1.HostedControlPlane) []error {
+	var errs []error
+
+	ignoreFailurePolicy := admissionregistrationv1.Ignore
+	sideEffectsNone := admissionregistrationv1.SideEffectClassNone
+	webhook := manifests.GCPLBWebhook()
+	if _, err := r.CreateOrUpdate(ctx, r.client, webhook, func() error {
+		webhook.Webhooks = []admissionregistrationv1.MutatingWebhook{{
+			AdmissionReviewVersions: []string{"v1", "v1beta1"},
+			Name:                    "lb-labels.gcp.hypershift.openshift.io",
+			ClientConfig: admissionregistrationv1.WebhookClientConfig{
+				CABundle: []byte(r.rootCA),
+				URL:      ptr.To(fmt.Sprintf("https://127.0.0.1:%d/mutate", gcpLBWebhookPort)),
+			},
+			FailurePolicy: &ignoreFailurePolicy,
+			Rules: []admissionregistrationv1.RuleWithOperations{{
+				Operations: []admissionregistrationv1.OperationType{
+					admissionregistrationv1.Create,
+					admissionregistrationv1.Update,
+				},
+				Rule: admissionregistrationv1.Rule{
+					APIGroups:   []string{""},
+					APIVersions: []string{"v1"},
+					Resources:   []string{"services"},
 				},
 			}},
 			SideEffects: &sideEffectsNone,

@@ -384,6 +384,10 @@ func AzureWorkloadIdentityWebhookServingCert(ns string) *corev1.Secret {
 	return secretFor(ns, "azure-workload-identity-webhook-serving-cert")
 }
 
+func GCPLBWebhookServingCert(ns string) *corev1.Secret {
+	return secretFor(ns, "gcp-lb-webhook-serving-cert")
+}
+
 func AzureDiskCsiDriverControllerMetricsServingCert(ns string) *corev1.Secret {
 	return secretFor(ns, "azure-disk-csi-driver-controller-metrics-serving-cert")
 }

@@ -2019,8 +2019,22 @@ func (r *HostedControlPlaneReconciler) reconcilePKI(ctx context.Context, hcp *hy
 		if err := r.reconcileAzurePlatformCerts(ctx, hcp, p, createOrUpdate, rootCASecret); err != nil {
 			return err
 		}
+	case hyperv1.GCPPlatform:
+		if err := r.reconcileGCPPlatformCerts(ctx, hcp, p, createOrUpdate, rootCASecret); err != nil {
+			return err
+		}
 	}
 
+	return nil
+}
+
+func (r *HostedControlPlaneReconciler) reconcileGCPPlatformCerts(ctx context.Context, hcp *hyperv1.HostedControlPlane, p *pki.PKIParams, createOrUpdate upsert.CreateOrUpdateFN, rootCASecret *corev1.Secret) error {
+	gcpLBWebhookServingCert := manifests.GCPLBWebhookServingCert(hcp.Namespace)
+	if _, err := createOrUpdate(ctx, r, gcpLBWebhookServingCert, func() error {
+		return pki.ReconcileGCPLBWebhookServingCert(gcpLBWebhookServingCert, rootCASecret, p.OwnerRef)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile %s secret: %w", gcpLBWebhookServingCert.Name, err)
+	}
 	return nil
 }
 
