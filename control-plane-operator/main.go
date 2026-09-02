@@ -45,6 +45,7 @@ import (
 	"github.com/openshift/hypershift/support/thirdparty/library-go/pkg/image/reference"
 	"github.com/openshift/hypershift/support/upsert"
 	"github.com/openshift/hypershift/support/util"
+	gcplbwebhook "github.com/openshift/hypershift/gcp-lb-webhook"
 	syncfgconfigmap "github.com/openshift/hypershift/sync-fg-configmap"
 	syncglobalpullsecret "github.com/openshift/hypershift/sync-global-pullsecret"
 	tokenminter "github.com/openshift/hypershift/token-minter"
@@ -172,6 +173,7 @@ func defaultCommand() *cobra.Command {
 	cmd.AddCommand(konnectivityhttpsproxy.NewStartCommand())
 	cmd.AddCommand(availabilityprober.NewStartCommand())
 	cmd.AddCommand(tokenminter.NewStartCommand())
+	cmd.AddCommand(gcplbwebhook.NewStartCommand())
 	cmd.AddCommand(ignitionserver.NewStartCommand())
 	cmd.AddCommand(etcddefrag.NewStartCommand())
 	cmd.AddCommand(kubernetesdefaultproxy.NewStartCommand())
