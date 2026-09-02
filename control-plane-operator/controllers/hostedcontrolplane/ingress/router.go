@@ -5,6 +5,7 @@ import (
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/openshift/hypershift/support/azureutil"
+	"github.com/openshift/hypershift/support/gcputil"
 	"github.com/openshift/hypershift/support/k8sutil"
 	"github.com/openshift/hypershift/support/netutil"
 
@@ -55,6 +56,13 @@ func ReconcileRouterService(svc *corev1.Service, internal, crossZoneLoadBalancin
 		if internal {
 			// Configure GCP Internal Load Balancer for PSC Service Attachment creation
 			svc.Annotations["networking.gke.io/load-balancer-type"] = "Internal"
+		}
+		// Propagate HCP GCP resource labels to the LB forwarding rules created by the
+		// GCP cloud-controller-manager running in the HCP namespace.
+		if v := gcputil.LBResourceLabelsAnnotationValue(gcputil.ResourceLabels(hcp)); v != "" {
+			svc.Annotations[gcputil.LBResourceLabelsAnnotation] = v
+		} else {
+			delete(svc.Annotations, gcputil.LBResourceLabelsAnnotation)
 		}
 	}
 
