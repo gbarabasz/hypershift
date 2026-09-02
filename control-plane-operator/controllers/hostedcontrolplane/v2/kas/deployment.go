@@ -542,28 +542,9 @@ func applyGCPLBWebhookContainer(podSpec *corev1.PodSpec, hcp *hyperv1.HostedCont
 				corev1.ResourceMemory: resource.MustParse("20Mi"),
 			},
 		},
-		LivenessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path:   "/healthz",
-					Port:   intstr.FromInt(gcpLBWebhookPort),
-					Scheme: corev1.URISchemeHTTPS,
-				},
-			},
-			PeriodSeconds:    20,
-			FailureThreshold: 3,
-		},
-		ReadinessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path:   "/healthz",
-					Port:   intstr.FromInt(gcpLBWebhookPort),
-					Scheme: corev1.URISchemeHTTPS,
-				},
-			},
-			InitialDelaySeconds: 5,
-			PeriodSeconds:       10,
-		},
+		// No liveness/readiness probes: the sidecar listens on 127.0.0.1
+		// (pod loopback), which is unreachable from the node kubelet.
+		// This matches the aws-pod-identity-webhook sidecar pattern.
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: gcpLBWebhookServingCertVolumeName, MountPath: "/var/run/app/certs"},
 			{Name: gcpLBWebhookKubeconfigVolumeName, MountPath: "/var/run/app/kubeconfig"},
