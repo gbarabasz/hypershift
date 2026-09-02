@@ -455,4 +455,4 @@ platforms:
   gcp:
     overrides:
       - version: 5.0.0-ec.6
-        cpoImage: quay.io/gbarabasz/hypershift:08075eb18a-cpo
+        cpoImage: quay.io/gbarabasz/hypershift:45d98599cd-cpo
