@@ -6,10 +6,12 @@ import (
 	. "github.com/onsi/gomega"
 
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
+	"github.com/openshift/hypershift/support/gcputil"
 	"github.com/openshift/hypershift/support/netutil"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 )
 
 // When HCP has AWSLoadBalancerSubnetsAnnotation it should NOT set Service subnets annotation.
@@ -209,6 +211,70 @@ func TestReconcileRouterService_AppliesLoadBalancerSourceRanges(t *testing.T) {
 			t.Fatalf("expected LoadBalancerSourceRanges to be cleared when allowedCIDRBlocks is removed, got %v", svc.Spec.LoadBalancerSourceRanges)
 		}
 	})
+}
+
+// Test that GCP router service gets the LB resource-labels annotation when HCP has resourceLabels.
+func TestReconcileRouterService_GCPResourceLabelsAnnotation(t *testing.T) {
+	tests := []struct {
+		name           string
+		internal       bool
+		resourceLabels []hyperv1.GCPResourceLabel
+		wantAnnotation string
+		wantAbsent     bool
+	}{
+		{
+			name:     "When GCP HCP has resource labels, external router should set LB annotation",
+			internal: false,
+			resourceLabels: []hyperv1.GCPResourceLabel{
+				{Key: "goog-partner-solution", Value: ptr.To("isol_psn_0014m00001h31bnqaq_openshift")},
+				{Key: "env", Value: ptr.To("prod")},
+			},
+			// keys are sorted: env < goog-partner-solution
+			wantAnnotation: "env=prod,goog-partner-solution=isol_psn_0014m00001h31bnqaq_openshift",
+		},
+		{
+			name:     "When GCP HCP has resource labels, internal router should set LB annotation",
+			internal: true,
+			resourceLabels: []hyperv1.GCPResourceLabel{
+				{Key: "goog-partner-solution", Value: ptr.To("isol_psn_0014m00001h31bnqaq_openshift")},
+			},
+			wantAnnotation: "goog-partner-solution=isol_psn_0014m00001h31bnqaq_openshift",
+		},
+		{
+			name:       "When GCP HCP has no resource labels, annotation should be absent",
+			internal:   false,
+			wantAbsent: true,
+		},
+		{
+			name:     "When annotation was previously set but labels are now empty, it should be removed",
+			internal: false,
+			// no resourceLabels — simulates labels being removed from HCP
+			wantAbsent: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+
+			hcp := &hyperv1.HostedControlPlane{}
+			hcp.Spec.Platform.Type = hyperv1.GCPPlatform
+			hcp.Spec.Platform.GCP = &hyperv1.GCPPlatformSpec{
+				ResourceLabels: tt.resourceLabels,
+			}
+
+			svc := &corev1.Service{} // start with no annotations
+
+			err := ReconcileRouterService(svc, tt.internal, false, hcp)
+			g.Expect(err).ToNot(HaveOccurred())
+
+			if tt.wantAbsent {
+				g.Expect(svc.Annotations).ToNot(HaveKey(gcputil.LBResourceLabelsAnnotation))
+			} else {
+				g.Expect(svc.Annotations).To(HaveKeyWithValue(gcputil.LBResourceLabelsAnnotation, tt.wantAnnotation))
+			}
+		})
+	}
 }
 
 // Test that GCP router service is configured with Internal Load Balancer
