@@ -163,7 +163,10 @@ func (r *GCPLoadBalancerLabelsReconciler) reconcileRouterServices(ctx context.Co
 		}
 
 		callCtx, cancel := context.WithTimeout(ctx, gcpAPITimeout)
-		forwardingRules, err := r.GcpClient.ListForwardingRules(callCtx, r.ProjectID, r.Region, fmt.Sprintf("backendService~%s", backendServiceName))
+		// The regional ForwardingRules REST endpoint rejects filters on
+		// backendService. The management project has a small rule inventory, so
+		// list it and match the backend service name exactly below.
+		forwardingRules, err := r.GcpClient.ListForwardingRules(callCtx, r.ProjectID, r.Region, "")
 		cancel()
 		if err != nil {
 			return false, false, fmt.Errorf("list forwarding rules for Service %s: %w", serviceName, err)
@@ -171,8 +174,7 @@ func (r *GCPLoadBalancerLabelsReconciler) reconcileRouterServices(ctx context.Co
 
 		found := false
 		for _, forwardingRule := range forwardingRules {
-			// The filter is intentionally followed by an exact check: Compute filter
-			// matching is substring based, and backend service names can overlap.
+			// Backend service names can overlap, so do not use substring matching.
 			if resourceName(forwardingRule.BackendService) != backendServiceName {
 				continue
 			}

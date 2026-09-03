@@ -26,13 +26,15 @@ type setForwardingRuleLabelsCall struct {
 }
 
 type fakeLoadBalancerLabelsComputeClient struct {
-	forwardingRules []*compute.ForwardingRule
-	listErr         error
-	setErr          error
-	setCalls        []setForwardingRuleLabelsCall
+	forwardingRules      []*compute.ForwardingRule
+	forwardingRuleFilter string
+	listErr              error
+	setErr               error
+	setCalls             []setForwardingRuleLabelsCall
 }
 
-func (f *fakeLoadBalancerLabelsComputeClient) ListForwardingRules(_ context.Context, _, _, _ string) ([]*compute.ForwardingRule, error) {
+func (f *fakeLoadBalancerLabelsComputeClient) ListForwardingRules(_ context.Context, _, _, filter string) ([]*compute.ForwardingRule, error) {
+	f.forwardingRuleFilter = filter
 	return f.forwardingRules, f.listErr
 }
 
@@ -54,6 +56,8 @@ func TestGCPLoadBalancerLabelsReconciler(t *testing.T) {
 		forwardingRules  []*compute.ForwardingRule
 		wantSetCalls     int
 		wantLabels       map[string]string
+		wantFilter       string
+		checkFilter      bool
 		wantRequeueAfter time.Duration
 	}{
 		{
@@ -70,6 +74,8 @@ func TestGCPLoadBalancerLabelsReconciler(t *testing.T) {
 			}},
 			wantSetCalls:     1,
 			wantLabels:       map[string]string{"existing": "preserved", "goog-partner-solution": "isol_psn_0014m00001h31bnqaq_openshift"},
+			wantFilter:       "",
+			checkFilter:      true,
 			wantRequeueAfter: labelOperationRetry,
 		},
 		{
@@ -147,6 +153,9 @@ func TestGCPLoadBalancerLabelsReconciler(t *testing.T) {
 			}
 			if tt.wantSetCalls != 0 && gcpClient.setCalls[0].labels.LabelFingerprint != "fingerprint" {
 				t.Fatalf("label fingerprint = %q, want fingerprint", gcpClient.setCalls[0].labels.LabelFingerprint)
+			}
+			if tt.checkFilter && gcpClient.forwardingRuleFilter != tt.wantFilter {
+				t.Fatalf("forwarding rule filter = %q, want %q", gcpClient.forwardingRuleFilter, tt.wantFilter)
 			}
 		})
 	}
