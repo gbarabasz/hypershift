@@ -10,8 +10,8 @@ import (
 )
 
 // LBResourceLabelsAnnotation is the Service annotation read by the GCP cloud-controller-manager
-// (openshift/cloud-provider-gcp) to apply labels to GCP load-balancer resources (forwarding rules,
-// backend services) created for that Service.
+// (openshift/cloud-provider-gcp) to apply labels to GCP forwarding rules created
+// for that Service. The Compute API does not support labels on BackendServices.
 // Format: comma-separated "key=value" pairs, e.g. "goog-partner-solution=foo,env=prod".
 const LBResourceLabelsAnnotation = "cloud.google.com/load-balancer-resource-labels"
 
