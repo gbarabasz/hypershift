@@ -1923,6 +1923,13 @@ func (r *HostedControlPlaneReconciler) reconcileGCPPlatformCerts(ctx context.Con
 		return fmt.Errorf("failed to reconcile gcp pd csi driver controller metrics serving cert: %w", err)
 	}
 
+	gcpLBWebhookServingCert := manifests.GCPLBWebhookServingCert(hcp.Namespace)
+	if _, err := createOrUpdate(ctx, r, gcpLBWebhookServingCert, func() error {
+		return pki.ReconcileGCPLBWebhookServingCert(gcpLBWebhookServingCert, rootCASecret, p.OwnerRef)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile %s secret: %w", gcpLBWebhookServingCert.Name, err)
+	}
+
 	return nil
 }
 
@@ -2117,16 +2124,6 @@ func (r *HostedControlPlaneReconciler) reconcilePlatformSpecificCerts(ctx contex
 		return r.reconcileAzurePlatformCerts(ctx, hcp, p, createOrUpdate, rootCASecret)
 	case hyperv1.GCPPlatform:
 		return r.reconcileGCPPlatformCerts(ctx, hcp, p, createOrUpdate, rootCASecret)
-	}
-	return nil
-}
-
-func (r *HostedControlPlaneReconciler) reconcileGCPPlatformCerts(ctx context.Context, hcp *hyperv1.HostedControlPlane, p *pki.PKIParams, createOrUpdate upsert.CreateOrUpdateFN, rootCASecret *corev1.Secret) error {
-	gcpLBWebhookServingCert := manifests.GCPLBWebhookServingCert(hcp.Namespace)
-	if _, err := createOrUpdate(ctx, r, gcpLBWebhookServingCert, func() error {
-		return pki.ReconcileGCPLBWebhookServingCert(gcpLBWebhookServingCert, rootCASecret, p.OwnerRef)
-	}); err != nil {
-		return fmt.Errorf("failed to reconcile %s secret: %w", gcpLBWebhookServingCert.Name, err)
 	}
 	return nil
 }
